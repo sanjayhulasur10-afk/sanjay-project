@@ -1,0 +1,7 @@
+node_modules/
+.env
+node.zip
+node_extract/
+dist/
+build/
+.DS_Store
