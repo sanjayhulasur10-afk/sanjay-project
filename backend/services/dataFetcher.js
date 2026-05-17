@@ -1,4 +1,5 @@
 const cron = require('node-cron');
+const axios = require('axios');
 const db = require('../db');
 const { broadcastSensorUpdate, broadcastAlert } = require('./websocketService');
 
@@ -13,8 +14,31 @@ let thresholds = {
 // Simulate sensor devices
 const devices = ['DEV-001', 'DEV-002'];
 
-function generateSimulatedData(deviceId) {
-  // Generate slightly fluctuating data based on typical water quality ranges
+async function fetchSensorData(deviceId) {
+  const providerApi = process.env.DATA_PROVIDER_API;
+  
+  // If an external API is provided and not set to 'mock'
+  if (providerApi && providerApi !== 'mock') {
+    try {
+      const response = await axios.get(providerApi);
+      const apiData = response.data;
+      
+      return {
+        _id: Math.random().toString(36).substr(2, 9),
+        deviceId,
+        timestamp: new Date(),
+        pH: apiData.pH !== undefined ? apiData.pH : (Math.random() * 2 + 6.5).toFixed(2),
+        turbidity: apiData.turbidity !== undefined ? apiData.turbidity : (Math.random() * 6).toFixed(2),
+        tds: apiData.tds !== undefined ? apiData.tds : Math.floor(Math.random() * 400 + 150),
+        temperature: apiData.temperature !== undefined ? apiData.temperature : (Math.random() * 15 + 15).toFixed(1),
+        sourceApi: providerApi
+      };
+    } catch (err) {
+      console.warn(`Failed to fetch from ${providerApi}. Falling back to simulated data. Error: ${err.message}`);
+    }
+  }
+
+  // Fallback to simulated generated data
   return {
     _id: Math.random().toString(36).substr(2, 9),
     deviceId,
@@ -51,7 +75,7 @@ function startDataFetcher() {
   cron.schedule('*/10 * * * * *', async () => {
     try {
       for (const deviceId of devices) {
-        const data = generateSimulatedData(deviceId);
+        const data = await fetchSensorData(deviceId);
         
         // Save to DB
         db.sensorReadings.push(data);
